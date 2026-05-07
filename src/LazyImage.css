@@ -1,139 +1,58 @@
-/* akong-button · Web 样式 · 用 var(--ak-*) 接 @akong/tokens */
+/* akong-lazy-image · Web 样式 · 用 var(--ak-*) 接 @akong/tokens */
 
 .ak-lazy-image {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ak-space-2);
-  font-family: var(--ak-font-sans);
-  font-weight: var(--ak-weight-medium);
-  letter-spacing: var(--ak-tracking-tight);
-  border: 0;
-  border-radius: var(--ak-radius-full);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  transition:
-    background-color var(--ak-duration-fast) var(--ak-ease-out),
-    color var(--ak-duration-fast) var(--ak-ease-out),
-    opacity var(--ak-duration-fast) var(--ak-ease-out);
-  white-space: nowrap;
-  outline: none;
-}
-
-.ak-lazy-image:focus-visible {
-  outline: 2px solid var(--ak-border-strong);
-  outline-offset: 2px;
-}
-
-.ak-lazy-image:active:not(:disabled) {
-  opacity: 0.7;
-}
-
-.ak-lazy-image:disabled,
-.ak-lazy-image[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-/* === Sizes === */
-.ak-lazy-image--sm {
-  height: 32px;
-  padding: 0 var(--ak-space-3);
-  font-size: var(--ak-text-sm);
-  min-width: 32px;
-}
-.ak-lazy-image--md {
-  height: 40px;
-  padding: 0 var(--ak-space-4);
-  font-size: var(--ak-text-base);
-  min-width: 40px;
-}
-.ak-lazy-image--lg {
-  height: 48px;
-  padding: 0 var(--ak-space-5);
-  font-size: var(--ak-text-md);
-  min-width: 48px;
-}
-
-/* === Variants === */
-.ak-lazy-image--primary {
-  background: var(--ak-fg);
-  color: var(--ak-fg-inverse);
-}
-.ak-lazy-image--primary:hover:not(:disabled) {
-  background: var(--ak-gray-11);
-}
-
-.ak-lazy-image--secondary {
+  position: relative;
+  display: block;
+  overflow: hidden;
   background: var(--ak-bg-subtle);
-  color: var(--ak-fg);
+  border-radius: var(--ak-radius-md);
+  /* shimmer 占位背景 · loading 时跑 · loaded/error 关 */
 }
-.ak-lazy-image--secondary:hover:not(:disabled) {
-  background: var(--ak-bg-hover);
-}
-
-.ak-lazy-image--ghost {
-  background: transparent;
-  color: var(--ak-fg);
-}
-.ak-lazy-image--ghost:hover:not(:disabled) {
-  background: var(--ak-bg-subtle);
-}
-
-.ak-lazy-image--destructive {
-  background: var(--ak-accent);
-  color: var(--ak-accent-fg);
-}
-.ak-lazy-image--destructive:hover:not(:disabled) {
-  background: var(--ak-accent-10);
-}
-
-.ak-lazy-image--link {
-  background: transparent;
-  color: var(--ak-fg);
-  padding: 0;
-  height: auto;
-  min-width: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--ak-border-strong);
-}
-.ak-lazy-image--link:hover:not(:disabled) {
-  text-decoration-color: var(--ak-fg);
-}
-
-/* === Modifiers === */
-.ak-lazy-image--full-width { width: 100%; }
 
 .ak-lazy-image--loading {
-  pointer-events: none;
-  position: relative;
-  color: transparent !important;
+  background-image: linear-gradient(
+    90deg,
+    var(--ak-bg-subtle) 0%,
+    var(--ak-bg-hover) 50%,
+    var(--ak-bg-subtle) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: ak-lazy-image-shimmer 1.4s ease-in-out infinite;
 }
-.ak-lazy-image--loading::after {
-  content: "";
+
+@keyframes ak-lazy-image-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.ak-lazy-image__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* fade-in · loading 时透明 · loaded 时 1 */
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.ak-lazy-image--loaded .ak-lazy-image__img {
+  opacity: 1;
+}
+
+.ak-lazy-image__fallback {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  color: var(--ak-fg-muted);
-  animation: ak-spin 0.7s linear infinite;
-}
-.ak-lazy-image--primary.ak-lazy-image--loading::after,
-.ak-lazy-image--destructive.ak-lazy-image--loading::after {
-  color: var(--ak-fg-inverse);
-}
-
-@keyframes ak-spin {
-  to { transform: rotate(360deg); }
-}
-
-.ak-lazy-image__icon {
-  display: inline-flex;
+  inset: 0;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  background: var(--ak-bg-subtle);
+  color: var(--ak-fg-subtle);
+}
+
+.ak-lazy-image__broken {
   flex-shrink: 0;
 }

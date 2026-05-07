@@ -1,108 +1,145 @@
 /**
  * Web 端组件测试 · vitest + @testing-library/react
  *
- * 7 件事:
- * - 渲染输出 (children / variant / size 反映)
- * - 用户交互 (click)
- * - 状态变化 (loading / disabled)
- * - 受控行为 (handler 触发)
- * - 边界 (空 children · ariaLabel)
- * - 防误触 (disabled / loading 不触发)
- * - icon 渲染
+ * spec 8 项:
+ * - 渲染初始 loading 状态 + shimmer 占位
+ * - src 加载完触发 onLoad + 切 loaded class
+ * - src 错误触发 onError + 切 error state
+ * - 错误时显示 fallback SVG (不见 img)
+ * - aspectRatio 反映在 style
+ * - width / height 反映在 style
+ * - objectFit 反映在 img style
+ * - 行为契约共享 spec (load + error 状态机)
  */
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { LazyImage } from '../src/LazyImage'
-import { buttonScenarios } from '../src/LazyImage.behavior'
+import { lazyImageScenarios } from '../src/LazyImage.behavior'
+
+const TEST_SRC = 'https://example.com/img.jpg'
 
 describe('LazyImage (Web) · 渲染', () => {
-  it('渲染 children', () => {
-    render(<LazyImage>Click me</LazyImage>)
-    expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument()
+  it('初始渲染 · loading 状态 + shimmer 占位 class', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" />)
+    const root = container.querySelector('.ak-lazy-image')
+    expect(root).toBeTruthy()
+    expect(root).toHaveClass('ak-lazy-image--loading')
+    expect(root?.getAttribute('data-status')).toBe('loading')
   })
 
-  it('应用 variant class', () => {
-    const { container } = render(<LazyImage variant="destructive">删除</LazyImage>)
-    expect(container.querySelector('.ak-lazy-image--destructive')).toBeTruthy()
-  })
-
-  it('应用 size class', () => {
-    const { container } = render(<LazyImage size="lg">Big</LazyImage>)
-    expect(container.querySelector('.ak-lazy-image--lg')).toBeTruthy()
-  })
-
-  it('fullWidth 加 class', () => {
-    const { container } = render(<LazyImage fullWidth>占满</LazyImage>)
-    expect(container.querySelector('.ak-lazy-image--full-width')).toBeTruthy()
-  })
-
-  it('icon-only · ariaLabel 必填 · 不报 a11y 错', () => {
-    render(<LazyImage ariaLabel="搜索" iconLeft="🔍" />)
-    expect(screen.getByRole('button', { name: '搜索' })).toBeInTheDocument()
+  it('img 默认带 loading="lazy" + decoding="async"', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" />)
+    const img = container.querySelector('img')
+    expect(img).toBeTruthy()
+    expect(img?.getAttribute('loading')).toBe('lazy')
+    expect(img?.getAttribute('decoding')).toBe('async')
   })
 })
 
-describe('LazyImage (Web) · 状态', () => {
-  it('disabled 加 attribute', () => {
-    render(<LazyImage disabled>禁用</LazyImage>)
-    expect(screen.getByRole('button')).toBeDisabled()
+describe('LazyImage (Web) · 加载状态机', () => {
+  it('img onLoad 触发 · 切 loaded class · 不再 loading', () => {
+    const onLoad = vi.fn()
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" onLoad={onLoad} />)
+    const img = container.querySelector('img')!
+    fireEvent.load(img)
+    const root = container.querySelector('.ak-lazy-image')!
+    expect(root).toHaveClass('ak-lazy-image--loaded')
+    expect(root).not.toHaveClass('ak-lazy-image--loading')
+    expect(onLoad).toHaveBeenCalledOnce()
   })
 
-  it('loading 加 aria-busy + class', () => {
-    const { container } = render(<LazyImage loading>加载</LazyImage>)
-    expect(screen.getByRole('button')).toHaveAttribute('aria-busy', 'true')
-    expect(container.querySelector('.ak-lazy-image--loading')).toBeTruthy()
+  it('img onError 触发 · 切 error state · 不再渲染 img', () => {
+    const onError = vi.fn()
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" onError={onError} />)
+    const img = container.querySelector('img')!
+    fireEvent.error(img)
+    const root = container.querySelector('.ak-lazy-image')!
+    expect(root).toHaveClass('ak-lazy-image--error')
+    expect(root?.getAttribute('data-status')).toBe('error')
+    expect(container.querySelector('img')).toBeNull()
+    expect(onError).toHaveBeenCalledOnce()
+  })
+
+  it('错误状态 · fallback SVG broken-image 出现', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="头像" />)
+    fireEvent.error(container.querySelector('img')!)
+    expect(container.querySelector('.ak-lazy-image__fallback')).toBeTruthy()
+    expect(container.querySelector('.ak-lazy-image__broken')).toBeTruthy()
+    // a11y · fallback 带 alt 文本
+    expect(screen.getByRole('img', { name: '头像' })).toBeInTheDocument()
+  })
+})
+
+describe('LazyImage (Web) · 尺寸 props', () => {
+  it('aspectRatio 反映在容器 style', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" aspectRatio={1.25} />)
+    const root = container.querySelector('.ak-lazy-image') as HTMLElement
+    // jsdom 把 1.25 normalize 成 "1.25 / 1" · 用 startsWith 兼容
+    expect(root.style.aspectRatio).toMatch(/^1\.25/)
+  })
+
+  it('width / height 数字 · 自动加 px', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" width={200} height={150} />)
+    const root = container.querySelector('.ak-lazy-image') as HTMLElement
+    expect(root.style.width).toBe('200px')
+    expect(root.style.height).toBe('150px')
+  })
+
+  it('width 字符串原样', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" width="50%" />)
+    const root = container.querySelector('.ak-lazy-image') as HTMLElement
+    expect(root.style.width).toBe('50%')
+  })
+
+  it('objectFit 反映在 img inline style', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" objectFit="contain" />)
+    const img = container.querySelector('img') as HTMLImageElement
+    expect(img.style.objectFit).toBe('contain')
+  })
+
+  it('objectFit default cover', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} alt="x" />)
+    const img = container.querySelector('img') as HTMLImageElement
+    expect(img.style.objectFit).toBe('cover')
   })
 })
 
 describe('LazyImage (Web) · 行为契约 (共享 spec)', () => {
-  for (const sc of buttonScenarios) {
+  for (const sc of lazyImageScenarios) {
     it(sc.name, () => {
-      const onClick = vi.fn()
-      render(<LazyImage {...sc.props} onClick={onClick}>X</LazyImage>)
-      fireEvent.click(screen.getByRole('button'))
-      if (sc.onPressOutcome === 'callback-fired') {
-        expect(onClick).toHaveBeenCalledOnce()
-      } else {
-        expect(onClick).not.toHaveBeenCalled()
+      const onLoad = vi.fn()
+      const onError = vi.fn()
+      const { container } = render(
+        <LazyImage src={TEST_SRC} alt="x" onLoad={onLoad} onError={onError} />,
+      )
+      const img = container.querySelector('img')!
+      if (sc.event === 'load') fireEvent.load(img)
+      else fireEvent.error(img)
+
+      const root = container.querySelector('.ak-lazy-image')!
+      expect(root).toHaveClass(`ak-lazy-image--${sc.expectedStatus}`)
+
+      if (sc.expectedCallback === 'onLoad') {
+        expect(onLoad).toHaveBeenCalledOnce()
+        expect(onError).not.toHaveBeenCalled()
+      } else if (sc.expectedCallback === 'onError') {
+        expect(onError).toHaveBeenCalledOnce()
+        expect(onLoad).not.toHaveBeenCalled()
       }
     })
   }
 })
 
-describe('LazyImage (Web) · 双口径回调', () => {
-  it('onClick 跟 onPress 同时传 · 都触发', () => {
-    const onClick = vi.fn()
-    const onPress = vi.fn()
-    render(<LazyImage onClick={onClick} onPress={onPress}>X</LazyImage>)
-    fireEvent.click(screen.getByRole('button'))
-    expect(onClick).toHaveBeenCalledOnce()
-    expect(onPress).toHaveBeenCalledOnce()
+describe('LazyImage (Web) · alt / a11y', () => {
+  it('alt 透传到 img', () => {
+    render(<LazyImage src={TEST_SRC} alt="头像图片" />)
+    expect(screen.getByRole('img', { name: '头像图片' })).toBeInTheDocument()
   })
 
-  it('只传 onPress · Web 端 click 也触发', () => {
-    const onPress = vi.fn()
-    render(<LazyImage onPress={onPress}>X</LazyImage>)
-    fireEvent.click(screen.getByRole('button'))
-    expect(onPress).toHaveBeenCalledOnce()
-  })
-})
-
-describe('LazyImage (Web) · 边界', () => {
-  it('空 children + 空 ariaLabel · 仍可渲染 (但不推荐 · TS 应警告)', () => {
-    render(<LazyImage />)
-    expect(screen.getByRole('button')).toBeInTheDocument()
-  })
-
-  it('type=submit · 提交表单', () => {
-    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
-    render(
-      <form onSubmit={onSubmit}>
-        <LazyImage type="submit">提交</LazyImage>
-      </form>,
-    )
-    fireEvent.click(screen.getByRole('button'))
-    expect(onSubmit).toHaveBeenCalledOnce()
+  it('alt 缺省 · img alt 空字符串 (装饰性图)', () => {
+    const { container } = render(<LazyImage src={TEST_SRC} />)
+    const img = container.querySelector('img')!
+    expect(img.getAttribute('alt')).toBe('')
   })
 })

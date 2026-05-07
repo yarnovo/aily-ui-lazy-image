@@ -1,39 +1,34 @@
 /**
  * 跨端行为契约 · Web + RN 都遵循
  *
- * 写法是"给定 props · 期望 · 该发生 / 不该发生"的纯描述
+ * 写法是"给定 props · 期望状态机转移"的纯描述
  * 各端测试 import 这份 spec 跑 · 行为强一致
  */
 
-export type Outcome = 'callback-fired' | 'callback-skipped'
+export type LazyImageStatus = 'loading' | 'loaded' | 'error'
 
-export interface Scenario {
+export interface StatusTransitionScenario {
   name: string
-  props: { disabled?: boolean; loading?: boolean }
-  /** 模拟一次"按下" · 期望结果 */
-  onPressOutcome: Outcome
+  /** 模拟事件 */
+  event: 'load' | 'error'
+  /** 期望最终状态 */
+  expectedStatus: LazyImageStatus
+  /** 期望触发的回调 */
+  expectedCallback: 'onLoad' | 'onError' | 'none'
 }
 
 /** 共享场景 · Web + RN 都跑 */
-export const buttonScenarios: Scenario[] = [
+export const lazyImageScenarios: StatusTransitionScenario[] = [
   {
-    name: 'default · 按下触发回调',
-    props: {},
-    onPressOutcome: 'callback-fired',
+    name: 'load 事件 · 切 loaded · 触发 onLoad',
+    event: 'load',
+    expectedStatus: 'loaded',
+    expectedCallback: 'onLoad',
   },
   {
-    name: 'disabled · 按下不触发',
-    props: { disabled: true },
-    onPressOutcome: 'callback-skipped',
-  },
-  {
-    name: 'loading · 按下不触发',
-    props: { loading: true },
-    onPressOutcome: 'callback-skipped',
-  },
-  {
-    name: 'disabled + loading · 按下不触发',
-    props: { disabled: true, loading: true },
-    onPressOutcome: 'callback-skipped',
+    name: 'error 事件 · 切 error · 触发 onError',
+    event: 'error',
+    expectedStatus: 'error',
+    expectedCallback: 'onError',
   },
 ]

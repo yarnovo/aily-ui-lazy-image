@@ -2,101 +2,133 @@
  * akong LazyImage · React Native 实现
  *
  * Metro bundler 默认按 `.native.tsx` 后缀解析 RN 端 · `.tsx` 解析 Web 端
- * 用方 `import { LazyImage } from '@akong/button'` 自动取对应平台
+ * 用方 `import { LazyImage } from '@akong/lazy-image'` 自动取对应平台
  */
 
-import { Pressable, Text, View, ActivityIndicator, useColorScheme } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Animated,
+  Image,
+  Text,
+  View,
+  useColorScheme,
+  type ImageErrorEventData,
+  type NativeSyntheticEvent,
+  type ImageResizeMode,
+} from 'react-native'
 import { tokens } from '@akong/tokens'
-import type { LazyImageProps } from './LazyImage.types'
+import type { LazyImageObjectFit, LazyImageProps } from './LazyImage.types'
 
-const sizes = {
-  sm: { height: 32, paddingH: tokens.space[3], fontSize: tokens.text.sm },
-  md: { height: 40, paddingH: tokens.space[4], fontSize: tokens.text.base },
-  lg: { height: 48, paddingH: tokens.space[5], fontSize: tokens.text.md },
-} as const
-
-function variantStyles(variant: NonNullable<LazyImageProps['variant']>, scheme: 'light' | 'dark') {
-  const t = scheme === 'dark' ? tokens.dark : tokens.light
-  switch (variant) {
-    case 'primary':
-      return { bg: t.fg, fg: t.fgInverse }
-    case 'secondary':
-      return { bg: t.bgSubtle, fg: t.fg }
-    case 'ghost':
-      return { bg: 'transparent', fg: t.fg }
-    case 'destructive':
-      return { bg: t.accent, fg: t.accentFg }
-    case 'link':
-      return { bg: 'transparent', fg: t.fg }
-  }
+const fitMap: Record<LazyImageObjectFit, ImageResizeMode> = {
+  cover: 'cover',
+  contain: 'contain',
+  fill: 'stretch',
 }
 
+type Status = 'loading' | 'loaded' | 'error'
+
 export function LazyImage(props: LazyImageProps) {
-  const {
-    variant = 'primary',
-    size = 'md',
-    disabled = false,
-    loading = false,
-    fullWidth = false,
-    iconLeft,
-    iconRight,
-    children,
-    onClick,
-    onPress,
-    ariaLabel,
-  } = props
+  const { src, alt = '', aspectRatio, width, height, objectFit = 'cover', onLoad, onError } = props
 
   const scheme = (useColorScheme() ?? 'light') as 'light' | 'dark'
-  const sz = sizes[size]
-  const v = variantStyles(variant, scheme)
+  const t = scheme === 'dark' ? tokens.dark : tokens.light
 
-  const handle = () => {
-    if (disabled || loading) return
-    onClick?.()
-    onPress?.()
+  const [status, setStatus] = useState<Status>('loading')
+  const opacity = useRef(new Animated.Value(0)).current
+  const shimmer = useRef(new Animated.Value(0)).current
+
+  // shimmer 来回扫 · 1.4s 一轮
+  useEffect(() => {
+    if (status !== 'loading') return
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [status, shimmer])
+
+  // image 淡入 0.25s
+  useEffect(() => {
+    if (status === 'loaded') {
+      Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }).start()
+    }
+  }, [status, opacity])
+
+  const handleLoad = () => {
+    setStatus('loaded')
+    onLoad?.()
+  }
+  const handleError = (_e: NativeSyntheticEvent<ImageErrorEventData>) => {
+    setStatus('error')
+    onError?.()
   }
 
+  const containerStyle = {
+    width: typeof width === 'number' ? width : undefined,
+    height: typeof height === 'number' ? height : undefined,
+    aspectRatio: aspectRatio,
+    backgroundColor: t.bgSubtle,
+    borderRadius: tokens.radius.md,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+  }
+
+  const shimmerOpacity = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  })
+
   return (
-    <Pressable
-      onPress={handle}
-      accessibilityLabel={ariaLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || loading, busy: loading }}
-      disabled={disabled || loading}
-      style={({ pressed }: { pressed: boolean }) => ({
-        height: variant === 'link' ? undefined : sz.height,
-        paddingHorizontal: variant === 'link' ? 0 : sz.paddingH,
-        backgroundColor: v.bg,
-        borderRadius: variant === 'link' ? 0 : tokens.radius.full,
-        flexDirection: 'row' as const,
-        alignItems: 'center' as const,
-        justifyContent: 'center' as const,
-        alignSelf: (fullWidth ? 'stretch' : 'flex-start') as 'stretch' | 'flex-start',
-        opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
-        gap: tokens.space[2],
-      })}
-    >
-      {loading ? (
-        <ActivityIndicator color={v.fg as string} />
-      ) : (
-        <>
-          {iconLeft && <View>{iconLeft}</View>}
-          {children && (
-            <Text
-              style={{
-                color: v.fg as string,
-                fontSize: sz.fontSize,
-                fontWeight: tokens.weight.medium,
-                textDecorationLine: variant === 'link' ? 'underline' : 'none',
-              }}
-            >
-              {children}
-            </Text>
-          )}
-          {iconRight && <View>{iconRight}</View>}
-        </>
+    <View style={containerStyle} accessible accessibilityLabel={alt}>
+      {status === 'loading' && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: t.bgHover,
+            opacity: shimmerOpacity,
+          }}
+        />
       )}
-    </Pressable>
+      {status !== 'error' && (
+        <Animated.View style={{ flex: 1, opacity }}>
+          <Image
+            source={{ uri: src }}
+            onLoad={handleLoad}
+            onError={handleError}
+            resizeMode={fitMap[objectFit]}
+            style={{ width: '100%', height: '100%' }}
+            accessibilityLabel={alt}
+          />
+        </Animated.View>
+      )}
+      {status === 'error' && (
+        <View
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: t.bgSubtle,
+          }}
+        >
+          <Text
+            style={{
+              color: t.fgSubtle,
+              fontSize: tokens.text.lg,
+              fontWeight: tokens.weight.regular,
+            }}
+          >
+            ✗
+          </Text>
+        </View>
+      )}
+    </View>
   )
 }
 
