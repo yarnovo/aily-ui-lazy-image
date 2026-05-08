@@ -1,5 +1,7 @@
 # @akong/lazy-image
 
+> ← 回 [akong design system](https://yarnovo.github.io/akong-core/) 总站
+
 akong LazyImage · 图片懒加载 · shimmer 占位 · 加载完淡入 · 跨端 (Web + React Native)
 
 ## Demo
